@@ -116,24 +116,6 @@ if(isset($_POST['image'])){
       file_put_contents($savePath.$filename, base64_decode($data));
     }
     
-    //extract image feature
-    $curl = curl_init();
-    curl_setopt($curl, CURLOPT_URL, "http://192.168.2.11:8983/solr/anime_cl/lireq?field=cl_ha&extract=http://192.168.2.11/pic/".$filename);
-    curl_setopt($curl, CURLOPT_RETURNTRANSFER, 1);
-    try{
-        $res = curl_exec($curl);
-        $extract_result = json_decode($res);
-        $cl_hi = $extract_result->histogram;
-        $cl_ha = $extract_result->hashes;
-        $cl_hi_key = "cl_hi:".$cl_hi;
-    }
-    catch(Exception $e){
-
-    }
-    finally{
-        curl_close($curl);
-    }
-    
     $final_result = new stdClass;
     $final_result->RawDocsCount = [];
     $final_result->RawDocsSearchTime = [];
@@ -156,7 +138,7 @@ if(isset($_POST['image'])){
             $trial++;
             $final_result->trial = $trial;
             $curl = curl_init();
-            curl_setopt($curl, CURLOPT_URL, "http://192.168.2.11:8983/solr/anime_cl/lireq?filter=".rawurlencode($filter)."&field=cl_ha&accuracy=".$trial."&candidates=4000000&rows=10&feature=".$cl_hi."&hashes=".implode($cl_ha,","));
+            curl_setopt($curl, CURLOPT_URL, "http://192.168.2.12:8983/solr/lire/lireq?&field=cl_ha&ms=false&url=http://192.168.2.11/pic/".$filename."&accuracy=".$trial."&candidates=2000000&rows=10");
             curl_setopt($curl, CURLOPT_RETURNTRANSFER, 1);
             try{
                 $res = curl_exec($curl);
@@ -165,7 +147,7 @@ if(isset($_POST['image'])){
                 $final_result->RawDocsSearchTime[] = intval($result->RawDocsSearchTime);
                 $final_result->ReRankSearchTime[] = intval($result->ReRankSearchTime);
                 if(intval($result->RawDocsCount) > 0){
-                    $final_result->docs = array_merge($final_result->docs,$result->docs);
+                    $final_result->docs = array_merge($final_result->docs,$result->response->docs);
                     usort($final_result->docs, "reRank");
                     $total_search_time = array_sum($final_result->RawDocsSearchTime) + array_sum($final_result->ReRankSearchTime);
                     foreach($final_result->docs as $doc){
@@ -200,8 +182,8 @@ if(isset($_POST['image'])){
     $docs = [];
     if(isset($final_result->RawDocsCount)){
         foreach($final_result->docs as $key => $doc){
-            $path = explode('?t=',$doc->id)[0];
-            $t = floatval(explode('?t=',$doc->id)[1]);
+            $path = explode('/',$doc->id)[0].'/'.explode('/',$doc->id)[1];
+            $t = floatval(explode('/',$doc->id)[2]);
             $doc->from = $t;
             $doc->to = $t;
             $matches = 0;
@@ -210,8 +192,8 @@ if(isset($_POST['image'])){
                     $matches = 1;
                     continue;
                 }
-                $path2 = explode('?t=',$doc2->id)[0];
-                $t2 = floatval(explode('?t=',$doc2->id)[1]);
+                $path2 = explode('/',$doc2->id)[0].'/'.explode('/',$doc2->id)[1];
+                $t2 = floatval(explode('/',$doc2->id)[2]);
                 if($doc->id != $doc2->id && $path == $path2 && abs($t - $t2) < 2){
                     $matches++;
                     if($t < $doc2->from)
@@ -227,12 +209,8 @@ if(isset($_POST['image'])){
     }
     
     foreach($docs as $key => $doc) {
-        #if($doc->d > 20){
-        #    unset($docs[$key]);
-        #    continue;
-        #}
-        $path = explode('?t=',$doc->id)[0];
-        $t = floatval(explode('?t=',$doc->id)[1]);
+        $path = explode('/',$doc->id)[0].'/'.explode('/',$doc->id)[1];
+        $t = floatval(explode('/',$doc->id)[2]);
         //$from = floatval(explode('?t=',$doc->id)[1]);
         //$to = floatval(explode('?t=',$doc->id)[1]);
         $start = $doc->from - 16;
@@ -241,38 +219,17 @@ if(isset($_POST['image'])){
 
         $dir = explode('/',$path)[0];
         $subdir = explode('/',$path)[1];
-        //the following directires has be relocated
-        if($subdir == "Fairy Tail")
-            $path = str_replace($dir.'/', '2009-10/', $path);
-        if($subdir == "Fairy Tail 2014")
-            $path = str_replace($dir.'/', '2014-04/', $path);
-        if($subdir == "Hunter x Hunter 2011")
-            $path = str_replace($dir.'/', '2011-10/', $path);
-        if($subdir == "美食的俘虜")
-            $path = str_replace($dir.'/', '2011-04/', $path);
-        if($subdir == "BLEACH")
-            $path = str_replace($dir.'/', '2004-10/', $path);
-        if($subdir == "Naruto")
-            $path = str_replace($dir.'/', '2002-10/', $path);
-        if($subdir == "犬夜叉")
-            $path = str_replace($dir.'/', '2000-10/', $path);
-        if($subdir == "家庭教師REBORN")
-            $path = str_replace($dir.'/', '2006-10/', $path);
-        if($subdir == "驅魔少年")
-            $path = str_replace($dir.'/', '2006-10/', $path);
         
+        $anilist_id = intval(explode('/',$path)[0]);
+        $doc->anilist_id = $anilist_id;
 
-        $season = explode('/',$path)[0];
-        $anime = explode('/',$path)[1];
-        $file = explode('/',$path)[2];
+        $file = explode('/',$path)[1];
         $episode = filename_to_episode($file);
 
         //$doc->i = $key;
         //$doc->start = $start;
         //$doc->end = $end;
         $doc->at = $t;
-        $doc->season = $season;
-        $doc->anime = $anime;
         $doc->filename = $file;
         $doc->episode = $episode;
         $expires = time() + 300;
@@ -286,7 +243,7 @@ if(isset($_POST['image'])){
         unset($doc->d);
 
         // use folder name as default title
-        $doc->title = $anime;
+        $doc->title = $file;
         $doc->title_native = null;
         $doc->title_chinese = null;
         $doc->title_english = null;
@@ -297,60 +254,43 @@ if(isset($_POST['image'])){
         $doc->synonyms_chinese = [];
 
         // use folder path to get anilist ID
-        $sql2 = mysqli_connect($sql_anime_hostname, $sql_anime_username, $sql_anime_password, $sql_anime_database);
-        if (!mysqli_connect_errno()) {
-            mysqli_query($sql2, "SET NAMES 'utf8'");
-            if ($stmt = mysqli_prepare($sql2, "SELECT `anilist_id` FROM `anime` WHERE `season`=? AND `title`=? LIMIT 0,1")){
-                mysqli_stmt_bind_param($stmt, "ss", $season, $anime);
-                mysqli_stmt_execute($stmt);
-                mysqli_stmt_store_result($stmt);
-                mysqli_stmt_bind_result($stmt, $anilist_id);
-                mysqli_stmt_fetch($stmt);
+        $doc->anilist_id = intval($anilist_id);
 
-                if(mysqli_stmt_num_rows($stmt) > 0) {
-
-                    $doc->anilist_id = intval($anilist_id);
-
-                    // use anilist ID to get titles of different languages
-                    $request = array(
-                    "size" => 1,
-                    "_source" => array("idMal", "title", "synonyms", "synonyms_chinese"),
-                    "query" => array(
-                        "ids" => array(
-                            "values" => array(intval($anilist_id))
-                        )
-                    )
-                    );
-                    $payload = json_encode($request);
-                    $curl = curl_init();
-                    curl_setopt($curl, CURLOPT_URL, "http://127.0.0.1:9200/anilist/anime/_search");
-                    curl_setopt($curl, CURLOPT_POSTFIELDS, $payload);
-                    curl_setopt($curl, CURLOPT_HTTPHEADER, array('Content-Type:application/json'));
-                    curl_setopt($curl, CURLOPT_RETURNTRANSFER, 1);
-                    try{
-                        $res = curl_exec($curl);
-                        $result = json_decode($res);
-                        if($result->hits && $result->hits->total > 0){
-                            $doc->mal_id = intval($result->hits->hits[0]->_source->idMal);
-                            $doc->title_romaji = $result->hits->hits[0]->_source->title->romaji ?? $anime;
-                            $doc->title_native = $result->hits->hits[0]->_source->title->native ?? $doc->title_romaji;
-                            $doc->title_english = $result->hits->hits[0]->_source->title->english ?? $doc->title_romaji;
-                            $doc->title_chinese = $result->hits->hits[0]->_source->title->chinese ?? $anime;
-                            $doc->title = $doc->title_native;
-                            $doc->synonyms = $result->hits->hits[0]->_source->synonyms;
-                            $doc->synonyms_chinese = $result->hits->hits[0]->_source->synonyms_chinese;
-                        }
-                    }
-                    catch(Exception $e){
-
-                    }
-                    finally{
-                        curl_close($curl);
-                    }
-                }
-                mysqli_stmt_close($stmt);
+        // use anilist ID to get titles of different languages
+        $request = array(
+        "size" => 1,
+        "_source" => array("idMal", "title", "synonyms", "synonyms_chinese"),
+        "query" => array(
+            "ids" => array(
+                "values" => array(intval($anilist_id))
+            )
+        )
+        );
+        $payload = json_encode($request);
+        $curl = curl_init();
+        curl_setopt($curl, CURLOPT_URL, "http://127.0.0.1:9200/anilist/anime/_search");
+        curl_setopt($curl, CURLOPT_POSTFIELDS, $payload);
+        curl_setopt($curl, CURLOPT_HTTPHEADER, array('Content-Type:application/json'));
+        curl_setopt($curl, CURLOPT_RETURNTRANSFER, 1);
+        try{
+            $res = curl_exec($curl);
+            $result = json_decode($res);
+            if($result->hits && $result->hits->total > 0){
+                $doc->mal_id = intval($result->hits->hits[0]->_source->idMal);
+                $doc->title_romaji = $result->hits->hits[0]->_source->title->romaji ?? $anime;
+                $doc->title_native = $result->hits->hits[0]->_source->title->native ?? $doc->title_romaji;
+                $doc->title_english = $result->hits->hits[0]->_source->title->english ?? $doc->title_romaji;
+                $doc->title_chinese = $result->hits->hits[0]->_source->title->chinese ?? $anime;
+                $doc->title = $doc->title_native;
+                $doc->synonyms = $result->hits->hits[0]->_source->synonyms;
+                $doc->synonyms_chinese = $result->hits->hits[0]->_source->synonyms_chinese;
             }
-            mysqli_close($sql2);
+        }
+        catch(Exception $e){
+
+        }
+        finally{
+            curl_close($curl);
         }
     }
     unset($final_result->docs);

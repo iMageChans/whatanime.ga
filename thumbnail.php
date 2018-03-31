@@ -6,16 +6,20 @@ header('Content-type: image/jpeg');
 $thumbdir = 'thumbnail/';
 $uuid = uniqid();
 $t = floatval($_GET['t']);
-$season = rawurldecode($_GET['season']);
-$anime = rawurldecode($_GET['anime']);
+$anilistID = rawurldecode($_GET['anilist_id']);
 $file = rawurldecode($_GET['file']);
-$filepath = '/mnt/data/anime_new/'.$season.'/'.$anime.'/'.$file;
+$filepath = '/mnt/data/anilist/'.$anilistID.'/'.$file;
 $thumbpath = $thumbdir.$uuid.'.jpg';
 $new_width = 320;
 $new_height = 180;
 
 try {
-  $ffmpeg = FFMpeg\FFMpeg::create();
+  $ffmpeg = FFMpeg\FFMpeg::create([
+    'ffmpeg.binaries' => '/usr/bin/avconv',
+    'ffmpeg.binaries' => '/usr/bin/ffmpeg',
+    'ffprobe.binaries' => '/usr/bin/avprobe',
+    'ffprobe.binaries' => '/usr/bin/ffprobe'
+  ]);
   $video = $ffmpeg->open($filepath);
   $video
     ->frame(FFMpeg\Coordinate\TimeCode::fromSeconds($t))
@@ -34,6 +38,7 @@ try {
   unlink($thumbpath);
   imagedestroy($image_p);
 } catch (Exception $e) {
+	file_put_contents("test.txt", $e);
 
   $image_p = imagecreatetruecolor($new_width, $new_height);
   $text_color = imagecolorallocate($image_p, 255, 255, 255);
