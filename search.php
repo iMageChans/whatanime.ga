@@ -69,9 +69,9 @@ if(isset($_POST['data'])){
     $final_result->docs = [];
     
 
-    $filter = '*';
+    $filter = "";
     if(isset($_POST['filter'])){
-        $filter = str_replace('"','',rawurldecode($_POST['filter']));
+        $filter = $_POST['filter'] ? intval($_POST['filter']) : "";
     }
     $trial = 0;
     if(isset($_POST['trial']) && intval($_POST['trial'])){
@@ -81,7 +81,7 @@ if(isset($_POST['data'])){
     $curl = curl_init();
     // ?field=cl_ha&ms=false&file=/mnt/store/1.jpg&accuracy=$1&candidates=200000&rows=5&fq=id:21495/\[Array*
     // fq=".rawurlencode($filter)."
-    curl_setopt($curl, CURLOPT_URL, "http://192.168.2.12:8983/solr/lire/lireq?&field=cl_ha&ms=false&url=http://192.168.2.11/pic/".$filename."&accuracy=".$trial."&candidates=2000000&rows=10");
+    curl_setopt($curl, CURLOPT_URL, "http://192.168.2.12:8983/solr/lire/lireq?fq=id:".$filter."/*&field=cl_ha&ms=false&url=http://192.168.2.11/pic/".$filename."&accuracy=".$trial."&candidates=2000000&rows=10");
     curl_setopt($curl, CURLOPT_RETURNTRANSFER, 1);
     try{
       $res = curl_exec($curl);

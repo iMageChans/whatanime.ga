@@ -129,16 +129,16 @@ if(isset($_POST['image'])){
         $final_result->CacheHit = true;
     }
     else{
-        $filter = '*';
+        $filter = "";
         if(isset($_POST['filter'])){
-            $filter = str_replace('"','',rawurldecode($_POST['filter']));
+            $filter = $_POST['filter'] ? intval($_POST['filter']) : "";
         }
         $trial = 0;
         while($trial < 5){
             $trial++;
             $final_result->trial = $trial;
             $curl = curl_init();
-            curl_setopt($curl, CURLOPT_URL, "http://192.168.2.12:8983/solr/lire/lireq?&field=cl_ha&ms=false&url=http://192.168.2.11/pic/".$filename."&accuracy=".$trial."&candidates=2000000&rows=10");
+            curl_setopt($curl, CURLOPT_URL, "http://192.168.2.12:8983/solr/lire/lireq?fq=id:".$filter."/*&field=cl_ha&ms=false&url=http://192.168.2.11/pic/".$filename."&accuracy=".$trial."&candidates=2000000&rows=10");
             curl_setopt($curl, CURLOPT_RETURNTRANSFER, 1);
             try{
                 $res = curl_exec($curl);
