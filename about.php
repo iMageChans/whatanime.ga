@@ -7,7 +7,7 @@ if(isset($_GET["cpu_load"])){
 }
 
 $curl = curl_init();
-curl_setopt($curl, CURLOPT_URL, "http://192.168.2.11:8983/solr/anime_cl/admin/luke?wt=json");
+curl_setopt($curl, CURLOPT_URL, "http://192.168.2.12:8983/solr/lire/admin/luke?wt=json");
 curl_setopt($curl, CURLOPT_RETURNTRANSFER, 1);
 $res = curl_exec($curl);
 $result = json_decode($res);
@@ -40,7 +40,8 @@ $to_percent = function($load_average){
 };
 $loadAverage = implode(", ",array_map($to_percent, explode(", ",explode("load average: ",exec("uptime"))[1])));
 
-$recentFile = str_replace('.xml','',shell_exec('find /mnt/data/anime_hash/ -type f -mmin -180 -name "*.xml" -exec basename "{}" \;'));
+// $recentFile = str_replace('.xml','',shell_exec('find /mnt/data/anime_hash/ -type f -mmin -180 -name "*.xml" -exec basename "{}" \;'));
+$recentFile = "";
 
 ?><!DOCTYPE html>
 <html>
