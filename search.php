@@ -66,39 +66,67 @@ if(isset($_POST['data'])){
     
     $final_result = new stdClass;
     $final_result->CacheHit = false;
+    $final_result->RawDocsCount = 0;
+    $final_result->RawDocsSearchTime = 0;
+    $final_result->ReRankSearchTime = 0;
     $final_result->docs = [];
     
 
     $filter = "";
     if(isset($_POST['filter'])){
-        $filter = $_POST['filter'] ? intval($_POST['filter']) : "";
+        $filter = $_POST['filter'] ? "fq=id:".intval($_POST['filter'])."/*" : "";
     }
     $trial = 0;
     if(isset($_POST['trial']) && intval($_POST['trial'])){
         $trial = intval($_POST['trial']) > 5 ? 5 : intval($_POST['trial']);
     }
 
-    $curl = curl_init();
-    // ?field=cl_ha&ms=false&file=/mnt/store/1.jpg&accuracy=$1&candidates=200000&rows=5&fq=id:21495/\[Array*
-    // fq=".rawurlencode($filter)."
-    curl_setopt($curl, CURLOPT_URL, "http://192.168.2.12:8983/solr/lire/lireq?fq=id:".$filter."/*&field=cl_ha&ms=false&url=http://192.168.2.11/pic/".$filename."&accuracy=".$trial."&candidates=2000000&rows=10");
-    curl_setopt($curl, CURLOPT_RETURNTRANSFER, 1);
-    try{
-      $res = curl_exec($curl);
-      $result = json_decode($res);
-      $final_result->RawDocsCount = intval($result->RawDocsCount);
-      $final_result->RawDocsSearchTime = intval($result->RawDocsSearchTime);
-      $final_result->ReRankSearchTime = intval($result->ReRankSearchTime);
-      if(intval($result->RawDocsCount) > 0){
+    $nodes = array(
+        "http://192.168.2.12:8983/solr/0/lireq?".$filter."&field=cl_ha&ms=false&url=http://192.168.2.11/pic/".$filename."&accuracy=".$trial."&candidates=1000000&rows=10",
+        "http://192.168.2.12:8983/solr/1/lireq?".$filter."&field=cl_ha&ms=false&url=http://192.168.2.11/pic/".$filename."&accuracy=".$trial."&candidates=1000000&rows=10",
+        "http://192.168.2.12:8983/solr/2/lireq?".$filter."&field=cl_ha&ms=false&url=http://192.168.2.11/pic/".$filename."&accuracy=".$trial."&candidates=1000000&rows=10",
+        "http://192.168.2.12:8983/solr/3/lireq?".$filter."&field=cl_ha&ms=false&url=http://192.168.2.11/pic/".$filename."&accuracy=".$trial."&candidates=1000000&rows=10",
+        "http://192.168.2.12:8983/solr/4/lireq?".$filter."&field=cl_ha&ms=false&url=http://192.168.2.11/pic/".$filename."&accuracy=".$trial."&candidates=1000000&rows=10",
+        "http://192.168.2.12:8983/solr/5/lireq?".$filter."&field=cl_ha&ms=false&url=http://192.168.2.11/pic/".$filename."&accuracy=".$trial."&candidates=1000000&rows=10",
+        "http://192.168.2.12:8983/solr/6/lireq?".$filter."&field=cl_ha&ms=false&url=http://192.168.2.11/pic/".$filename."&accuracy=".$trial."&candidates=1000000&rows=10",
+        "http://192.168.2.12:8983/solr/7/lireq?".$filter."&field=cl_ha&ms=false&url=http://192.168.2.11/pic/".$filename."&accuracy=".$trial."&candidates=1000000&rows=10",
+        "http://192.168.2.12:8983/solr/8/lireq?".$filter."&field=cl_ha&ms=false&url=http://192.168.2.11/pic/".$filename."&accuracy=".$trial."&candidates=1000000&rows=10",
+        "http://192.168.2.12:8983/solr/9/lireq?".$filter."&field=cl_ha&ms=false&url=http://192.168.2.11/pic/".$filename."&accuracy=".$trial."&candidates=1000000&rows=10",
+    );
+    $node_count = count($nodes);
+
+    $curl_arr = array();
+    $master = curl_multi_init();
+
+    for($i = 0; $i < $node_count; $i++)
+    {
+        $url =$nodes[$i];
+        $curl_arr[$i] = curl_init($url);
+        curl_setopt($curl_arr[$i], CURLOPT_RETURNTRANSFER, true);
+        curl_multi_add_handle($master, $curl_arr[$i]);
+    }
+
+    do {
+        curl_multi_exec($master,$running);
+    } while($running > 0);
+
+
+    for($i = 0; $i < $node_count; $i++)
+    {
+        $results[] = curl_multi_getcontent($curl_arr[$i]);
+    }
+
+    foreach ($results as $res) {
+        $result = json_decode($res);
+        $final_result->RawDocsCount += intval($result->RawDocsCount);
+        $final_result->RawDocsSearchTime += intval($result->RawDocsSearchTime);
+        $final_result->ReRankSearchTime += intval($result->ReRankSearchTime);
+        if(intval($result->RawDocsCount) > 0){
           $final_result->docs = array_merge($final_result->docs,$result->response->docs);
           usort($final_result->docs, "reRank");
-      }
+        }
     }
-    catch(Exception $e){
-    }
-    finally{
-      curl_close($curl);
-    }
+    $final_result->docs = array_slice($final_result->docs, 0, 20);
 
     $final_result->quota = $quota;
     $final_result->expire = $expire;
